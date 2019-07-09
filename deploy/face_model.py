@@ -6,7 +6,6 @@ from scipy import misc
 import sys
 import os
 import argparse
-#import tensorflow as tf
 import numpy as np
 import mxnet as mx
 import random
@@ -22,7 +21,7 @@ import face_preprocess
 
 
 def do_flip(data):
-  for idx in xrange(data.shape[0]):
+  for idx in range(data.shape[0]):
     data[idx,:,:] = np.fliplr(data[idx,:,:])
 
 def get_model(ctx, image_size, model_str, layer):
@@ -43,7 +42,12 @@ def get_model(ctx, image_size, model_str, layer):
 class FaceModel:
   def __init__(self, args):
     self.args = args
-    ctx = mx.gpu(args.gpu)
+    #ctx = mx.gpu(args.gpu)
+    if args.gpu>=0:
+      ctx = mx.gpu(args.gpu)
+    elif args.gpu==-1:
+      ctx = mx.cpu()
+    	
     _vec = args.image_size.split(',')
     assert len(_vec)==2
     image_size = (int(_vec[0]), int(_vec[1]))
@@ -69,19 +73,33 @@ class FaceModel:
 
   def get_input(self, face_img):
     ret = self.detector.detect_face(face_img, det_type = self.args.det)
+    
     if ret is None:
-      return None
-    bbox, points = ret
-    if bbox.shape[0]==0:
-      return None
-    bbox = bbox[0,0:4]
-    points = points[0,:].reshape((2,5)).T
-    #print(bbox)
-    #print(points)
-    nimg = face_preprocess.preprocess(face_img, bbox, points, image_size='112,112')
-    nimg = cv2.cvtColor(nimg, cv2.COLOR_BGR2RGB)
-    aligned = np.transpose(nimg, (2,0,1))
-    return aligned
+      all_aligned,points,bbox = [],[],[]
+	
+    else:
+      bbox, points = ret
+      #print(bbox)
+
+    
+      for i in range(bbox.shape[0]):
+        single_bbox = bbox[i,0:4]
+        single_points = points[i,:].reshape((2,5)).T
+        nimg = face_preprocess.preprocess(face_img, single_bbox, single_points, image_size='112,112')
+        nimg = cv2.cvtColor(nimg, cv2.COLOR_BGR2RGB)
+        aligned = np.transpose(nimg, (2,0,1))
+        
+        if i ==0:
+          all_aligned = aligned.reshape(1,aligned.shape[0],aligned.shape[1],aligned.shape[2])
+        else:
+          all_aligned = np.concatenate((all_aligned,aligned.reshape(1,aligned.shape[0],aligned.shape[1],aligned.shape[2])),axis=0 )  
+    	
+	  #bbox = bbox[0,0:4]
+      #points = points[0,:].reshape((2,5)).T
+      #nimg = face_preprocess.preprocess(face_img, bbox, points, image_size='112,112')
+      #nimg = cv2.cvtColor(nimg, cv2.COLOR_BGR2RGB)
+      #aligned = np.transpose(nimg, (2,0,1))
+    return all_aligned,points,bbox
 
   def get_feature(self, aligned):
     input_blob = np.expand_dims(aligned, axis=0)
