@@ -3,6 +3,7 @@
 Created on Tue Jul  9 18:34:40 2019
 
 @author: linhenrycw
+#version 2: display rectangle and text by PIL for 中文 label
 """
 
 import face_model
@@ -18,8 +19,8 @@ import time
 from timeit import default_timer as timer
 
 
-registed_folder = 'registed_img_r100'
-
+registed_folder = 'registed_img_mobile'
+fontText = ImageFont.truetype("font/simsun.ttc", 20, encoding="utf-8")
 
 def face_registed_projector(model):
     #run when have not registed to npy file
@@ -80,46 +81,55 @@ def registed_face_loader():
 def face_comparison(img,registed_feature,cat,model,threshold = 0.3):
 
     faces,points,bbox = model.get_input(img)
-
+    
+    #cv2 format to PIL format for 中文字label
+    img_PIL = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)) #cv2 to PIL
+	
     all_cat,all_sim = [],[]
     if (faces==[] or points==[] or bbox==[]):
       img = img
     
     else:
-      for i in range(faces.shape[0]):
-          
-          face = faces[i]
-          f2 = model.get_feature(face)
-          sim_record = []
-          for j in range(len(registed_feature)):
-              sim_record.append(np.dot(registed_feature[j], f2.T))
-          
-          most_sim_ind = sim_record.index(max(sim_record))
-                  
-          
-          margin = 44
-          x1 = int(np.maximum(np.floor(bbox[i][0]-margin/2), 0) )
-          y1 = int(np.maximum(np.floor(bbox[i][1]-margin/2), 0) )
-          x2 = int(np.minimum(np.floor(bbox[i][2]+margin/2), img.shape[1]) )
-          y2 = int(np.minimum(np.floor(bbox[i][3]+margin/2), img.shape[0]) )
-  
-          cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-          if sim_record[most_sim_ind]>=0.3:
-              text = cat[most_sim_ind]+','+str(np.round(sim_record[most_sim_ind],3))
-          else:
-              text = '???'
-          cv2.putText(img, text, (x1,y1-5), cv2.FONT_HERSHEY_TRIPLEX, 0.8, (0, 0, 255))
-          
-          all_cat.append(cat)
-          all_sim.append(sim_record)
-          #plt.subplot(faces.shape[0]+1,1,i+1)
-          #plt.imshow(np.transpose(face,(1,2,0)),aspect='equal')
-          #plt.title('most similar face:%s, similarity is:%f'%(cat[most_sim_ind],sim_record[most_sim_ind]))
-      #plt.savefig('1.png', bbox_inches = 'tight')
-      #plt.show()
-    
-    	
-    return all_cat,all_sim,img
+        for i in range(faces.shape[0]):
+            
+            face = faces[i]
+            f2 = model.get_feature(face)
+            
+            gender, age = model.get_ga(face)
+	      
+            sim_record = []
+            for j in range(len(registed_feature)):
+                sim_record.append(np.dot(registed_feature[j], f2.T))
+            
+            most_sim_ind = sim_record.index(max(sim_record))
+                       
+            margin = 44
+            x1 = int(np.maximum(np.floor(bbox[i][0]-margin/2), 0) )
+            y1 = int(np.maximum(np.floor(bbox[i][1]-margin/2), 0) )
+            x2 = int(np.minimum(np.floor(bbox[i][2]+margin/2), img.shape[1]) )
+            y2 = int(np.minimum(np.floor(bbox[i][3]+margin/2), img.shape[0]) )
+            
+            draw = ImageDraw.Draw(img_PIL)
+            if sim_record[most_sim_ind]>=0.3:
+                #text = cat[most_sim_ind]+','+str(np.round(sim_record[most_sim_ind],3))
+                text = cat[most_sim_ind]+str(np.round(sim_record[most_sim_ind],2))+',sex:'+ str(gender) + ',age:' + str(age)
+                draw.rectangle([x1,y2,x2,y1],outline="red")#畫框
+                draw.rectangle([x1,y1,x2,y1+20],outline="red",fill="red") #字體background的框
+                draw.text((x1,y1-1), text, (255, 255, 255), font=fontText)
+	    	  
+            else:
+                draw.rectangle([x1,y2,x2,y1],outline="green" )
+                text = 'sex:'+ str(gender) + ',age:' + str(age)
+                draw.rectangle([x1,y1,x2,y1+20],outline="green",fill="green") #字體background的框
+                draw.text((x1,y1-1), text, (255, 255, 255), font=fontText)
+            
+            del draw
+            
+            all_cat.append(cat)
+            all_sim.append(sim_record)
+        
+        
+    return all_cat,all_sim,img_PIL
 
 
 def face_comparison_video(registed_feature,cat,model,threshold = 0.3, output_path=""):
@@ -142,7 +152,8 @@ def face_comparison_video(registed_feature,cat,model,threshold = 0.3, output_pat
         return_value, frame = vid.read()
         
         all_cat,all_sim,image = face_comparison(frame,registed_feature,cat,model,threshold = 0.3)
-        result = np.asarray(image)
+        img_OpenCV = cv2.cvtColor(np.asarray(image),cv2.COLOR_RGB2BGR) #轉回cv2 format 否則RGB亂掉
+        result = np.asarray(img_OpenCV)
         curr_time = timer()
         exec_time = curr_time - prev_time
         prev_time = curr_time
@@ -168,7 +179,7 @@ def face_comparison_video(registed_feature,cat,model,threshold = 0.3, output_pat
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='face embedding and comparison')
     parser.add_argument('--image-size', default='112,112', help='') #follow sphere face & cosin face format
-    parser.add_argument('--model', default='../models/model-r100-ii/model,0', help='path to load model.')
+    parser.add_argument('--model', default='../models/model-mobileface/model,0', help='path to load model.')
     parser.add_argument('--ga-model', default='../models/gamodel-r50/model,0', help='path to load model.')
     parser.add_argument('--gpu', default=0, type=int, help='gpu id,(-1) for CPU')
     parser.add_argument('--det', default=0, type=int, help='mtcnn option, 1 means using R+O, 0 means detect from begining')
@@ -195,10 +206,8 @@ if __name__ == '__main__':
                 elapsed_time = time.time() - start_time
                 print('**cost %s time for compare %d face with %d face in database'%(elapsed_time,len(all_cat),len(cat)))
                 
-                img2 = img_result[: , : , : : -1]
-                img2 = Image.fromarray(img2, 'RGB')
-                img2.show()
-                img2.save('out.jpg')
+                img_result.show()
+                img_result.save('out.jpg')
 				
 				
                 #for print result
