@@ -20,7 +20,7 @@ from timeit import default_timer as timer
 
 
 registed_folder = 'registed_img_mobile'
-fontText = ImageFont.truetype("font/simsun.ttc", 23, encoding="utf-8")
+#fontText = ImageFont.truetype("font/simsun.ttc", 23, encoding="utf-8")
 
 def face_registed_projector(model):
     #run when have not registed to npy file
@@ -30,18 +30,25 @@ def face_registed_projector(model):
     img_list = img_list_jpg + img_list_jpeg + img_list_png
     fact_cnt = 0
     for file in img_list:
-        img = cv2.imread(file)
+        #img = cv2.imread(file)
+        img=cv2.imdecode(np.fromfile(file,dtype=np.uint8),-1)
         if '.jp' in file:
             file_name = file.split('\\')[-1].split('.jp')[0]
         elif '.png' in file:
             file_name = file.split('\\')[-1].split('.png')[0]
+        elif '.JPG' in file:
+            file_name = file.split('\\')[-1].split('.JPG')[0]
+        print('registering for %s'%file_name)
+        try:
+            faces,points,bbox = model.get_input(img)
+        except:
+            print('fail to read %s, which will be ommitted'%file_name)		
         
-        faces,points,bbox = model.get_input(img)
         for i in range(faces.shape[0]):
             face = faces[i]
             f1 = model.get_feature(face)
-            print('feature shape:')
-            print(f1.shape)
+            #print('feature shape:')
+            #print(f1.shape)
         
             margin = 44
             x1 = int(np.maximum(np.floor(bbox[i][0]-margin/2), 0) )
@@ -57,7 +64,8 @@ def face_registed_projector(model):
                 npy_name = file_name+'.npy'
                 jpg_name = file_name+'.jpg'
             np.save(os.path.join(cwd,registed_folder,npy_name),f1)
-            cv2.imwrite(os.path.join(cwd,registed_folder,jpg_name), img[y1:y2, x1:x2])
+            #cv2.imwrite(os.path.join(cwd,registed_folder,jpg_name), img[y1:y2, x1:x2])
+            cv2.imencode('.jpg', img[y1:y2, x1:x2])[1].tofile(os.path.join(cwd,registed_folder,jpg_name))
             fact_cnt+=1
     print('成功註冊 %d 張照片，共 %d 張臉!'%(len(img_list),fact_cnt))
 
@@ -71,8 +79,10 @@ def registed_face_loader():
         f1 = np.load(npy)
         cat.append(npy.split('\\')[-1].split('.npy')[0])
         registed_feature.append(f1)
-
-    print('load registed %d faces with %d dimensions'%(len(registed_feature),registed_feature[0].shape[0]))
+    if registed_npy_list==[]:
+        print('there is no .npy file in registed face folder')
+    else:
+        print('load registed %d faces with %d dimensions'%(len(registed_feature),registed_feature[0].shape[0]))
     print('registed names:')
     print(cat)
     return registed_feature,cat
@@ -91,6 +101,9 @@ def face_comparison(img,registed_feature,cat,model,threshold = 0.45):
       img = img
     
     else:
+        text_size = np.floor(2e-2 * img_PIL.size[1]).astype('int32')
+        fontText = ImageFont.truetype("font/simsun.ttc", text_size, encoding="utf-8")
+        thickness = (img_PIL.size[0] + img_PIL.size[1]) // 600
         for i in range(faces.shape[0]):
             
             face = faces[i]
@@ -113,16 +126,21 @@ def face_comparison(img,registed_feature,cat,model,threshold = 0.45):
             draw = ImageDraw.Draw(img_PIL)
             if sim_record[most_sim_ind]>=threshold:
                 text = cat[most_sim_ind]+','+str(np.round(sim_record[most_sim_ind],3))
-                #text = cat[most_sim_ind]+str(np.round(sim_record[most_sim_ind],2))+',age:' + str(age)
-                draw.rectangle([x1,y2,x2,y1],outline="red")#畫框
-                draw.rectangle([x1,y1,x2,y1+23],outline="red",fill="red") #字體background的框
-                draw.text((x1,y1-1), text, (0, 0, 0), font=fontText)
+                
+                label_size = draw.textsize(text, fontText)
+                if y1 - label_size[1] >= 0:
+                    text_origin = np.array([x1, y1 - label_size[1]])
+                else:
+                    text_origin = np.array([x1, y1 + 1])
+                
+                for i in range(thickness):
+                    draw.rectangle([x1+i,y2+i,x2-i,y1-i],outline="red")#畫框
+                    draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)],outline="red",fill="red")#字體background的框
+                    draw.text(text_origin, text, (255, 255, 255), font=fontText)
 	    	  
             else:
-                draw.rectangle([x1,y2,x2,y1],outline="green" )
-                text = '?'
-                draw.rectangle([x1,y1,x2,y1+23],outline="green",fill="green") #字體background的框
-                draw.text((x1,y1-1), text, (0, 0, 0), font=fontText)
+                for i in range(thickness):
+                    draw.rectangle([x1+i,y2+i,x2-i,y1-i],outline="green" )#畫框
             
             del draw
             
@@ -133,8 +151,11 @@ def face_comparison(img,registed_feature,cat,model,threshold = 0.45):
     return all_cat,all_sim,img_PIL
 
 
-def face_comparison_video(registed_feature,cat,model,threshold = 0.45, output_path=""):
-    vid = cv2.VideoCapture(0)
+def face_comparison_video(registed_feature,cat,model,input_path,output_path,threshold = 0.45):
+    if input_path=='':
+	    vid = cv2.VideoCapture(0)
+    else:
+        vid = cv2.VideoCapture(input_path)
     if not vid.isOpened():
         raise IOError("Couldn't open webcam or video")
     video_FourCC    = int(vid.get(cv2.CAP_PROP_FOURCC))
@@ -196,9 +217,15 @@ if __name__ == '__main__':
             args.regist = int(regist_mode_input)
             if args.regist==0:
                 while True:
-                    image_mode_input = input('照片模式?(0 for using web camera, 1 for 照片):')
+                    image_mode_input = input('照片模式?(0 for video, 1 for 照片):')
                     if image_mode_input in ["0","1"]:
                         args.image_mode = int(image_mode_input)
+                        if args.image_mode ==0:
+                            video_input_path = input('input video path or just press enter to use web camera:')
+                            if video_input_path!='':
+                                video_output_path = input('video detect result output path:')
+                            else:
+                                video_output_path = ''
                         break
                     else:
                         print('please follow the input rule!!')
@@ -220,7 +247,8 @@ if __name__ == '__main__':
             while True:
                 img_path = input('input the image path:')
                 try:
-                    img = cv2.imread(img_path)
+                    #img = cv2.imread(img_path)
+                    img=cv2.imdecode(np.fromfile(img_path,dtype=np.uint8),-1)
                     start_time = time.time()
                     all_cat,all_sim,img_result = face_comparison(img,registed_feature,cat,model)
                     elapsed_time = time.time() - start_time
@@ -245,7 +273,7 @@ if __name__ == '__main__':
                     print(result_sorted[:5])
 
         else:
-            face_comparison_video(registed_feature,cat,model,threshold = 0.45, output_path="")
+            face_comparison_video(registed_feature,cat,model,video_input_path,video_output_path,threshold = 0.45)
 
 
 
