@@ -1,0 +1,42 @@
+<script>
+ function showhide(id) {
+       	var e = document.getElementById(id);
+       	e.style.display = (e.style.display == 'block') ? 'none' : 'block';
+     }
+</script>
+<div class="container">
+  <div class="row">
+    <div class="col">
+
+      <h1>Upload an image</h1>
+      <hr>
+	  
+       <img src= "/static/home_page.jpg">
+	  
+
+      <form action="/upload-image" method="POST" enctype="multipart/form-data">
+
+        <div class="form-group">
+          <label>Select image</label>
+          <div class="custom-file">
+            <input type="file" class="custom-file-input" name="image" id="image">
+          </div>
+        </div>
+		<p></p>
+        <input type="submit" name="submit_button" value="recognition">
+		<input type="submit" name="submit_button" value="register">
+		<input type="submit" name="submit_button" value="manage register list">
+      </form>
+
+	  <p></p>
+	  
+	    <a href="javascript:showhide('uniquename')">
+    		已註冊名單
+        </a>
+    	<div id="uniquename" style="display:none;">
+    		<p>{{ registered_face_list }}</p>
+    	</div>
+	  
+    </div>
+  </div>
+</div>

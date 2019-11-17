@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>register face</title>
+</head>
+<body>
+	<style>
+	img {
+		max-width: 20%;
+		max-height: 20%;
+	}
+	</style>
+
+	<img src="{{ face }}" alt="detect result" width="10%" height="10%">
+
+    <form method='post' action="{{ url_for('register_face') }}"> 
+        <p>
+        <input type='text' name='face_name' />
+        </p>
+        
+		<p>
+        <button type='submit'>Submit</button>
+        </p>    
+		<b>Note:若非人臉或不想註冊之人臉 請直接按 submit!</b>
+    </form>
+</body>
+</html>

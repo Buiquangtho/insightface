@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<title>File Manager</title>
+<h1>File Manager</h1>
+<hr>
+
+<a href="/upload-image">
+<button>back to upload image</button>
+</a>
+<h2>已註冊清單:</h2>
+<font color="red">Note:'.jpg' & '.npy為成對檔案'，.npy為人臉轉換後的抽象特徵向量</font>
+<p></p>
+
+{% for photo in files_list %}
+    - {{ photo }}
+    <a href="{{ url_for('open_file', filename=photo) }}">open</a>
+    <a href="{{ url_for('delete_file', filename=photo) }}">del</a><br>
+{% endfor %}
